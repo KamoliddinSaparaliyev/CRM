@@ -1,7 +1,8 @@
-const Joi = require('joi');
+const Joi = require("joi");
 
 exports.postGroupSchema = Joi.object({
   name: Joi.string(),
   teacher_id: Joi.number(),
   assistent_teacher_id: Joi.number(),
+  direction_id: Joi.number(),
 });

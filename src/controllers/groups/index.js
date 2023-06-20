@@ -1,6 +1,6 @@
-const express = require('express');
-const db = require('../../db');
-const knex = require('knex');
+const express = require("express");
+const db = require("../../db");
+const knex = require("knex");
 
 /**
  *
@@ -9,31 +9,44 @@ const knex = require('knex');
  */
 const postGroup = async (req, res) => {
   try {
-    const { name, teacher_id, assistent_teacher_id } = req.body;
+    const { name, teacher_id, assistent_teacher_id, direction_id } = req.body;
 
     if (teacher_id) {
-      const existing = await db('stuff').where({ id: teacher_id }).first();
+      const existing = await db("stuff").where({ id: teacher_id }).first();
 
-      if (!existing || existing.role !== 'teacher') {
+      if (!existing || existing.role !== "teacher") {
         return res.status(400).json({
-          error: 'Teacher mavjud emas.',
+          error: "Teacher mavjud emas.",
+        });
+      }
+    }
+    if (direction_id) {
+      const existing = await db("directions")
+        .where({ id: direction_id })
+        .first();
+
+      if (!existing) {
+        return res.status(400).json({
+          error: "Yo'nalish mavjud emas.",
         });
       }
     }
 
     if (assistent_teacher_id) {
-      const existing = await db('stuff').where({ id: assistent_teacher_id }).first();
+      const existing = await db("stuff")
+        .where({ id: assistent_teacher_id })
+        .first();
 
-      if (!existing || existing.role !== 'assistent_teacher') {
+      if (!existing || existing.role !== "assistent_teacher") {
         return res.status(400).json({
-          error: 'Asistent teacher mavjud emas.',
+          error: "Asistent teacher mavjud emas.",
         });
       }
     }
 
-    const result = await db('groups')
-      .insert({ name, teacher_id, assistent_teacher_id })
-      .returning('*');
+    const result = await db("groups")
+      .insert({ name, teacher_id, assistent_teacher_id, direction_id })
+      .returning("*");
 
     res.status(201).json({
       group: result[0],
@@ -52,19 +65,30 @@ const postGroup = async (req, res) => {
  */
 const getGroups = async (req, res) => {
   try {
-    const { q, offset = 0, limit = 5, sort_by = 'id', sort_order = 'desc' } = req.query;
-    const dbQuery = db('groups').select(
-      'groups.id',
-      'groups.name',
-      'groups.teacher_id',
-      'groups.assistent_teacher_id'
+    const {
+      q,
+      offset = 0,
+      limit = 5,
+      sort_by = "id",
+      sort_order = "desc",
+      direction_id,
+    } = req.query;
+    const dbQuery = db("groups").select(
+      "groups.id",
+      "groups.name",
+      "groups.teacher_id",
+      "groups.assistent_teacher_id",
+      "groups.direction_id"
     );
 
     if (q) {
-      dbQuery.andWhereILike('groups.name', `%${q}%`);
+      dbQuery.andWhereILike("groups.name", `%${q}%`);
+    }
+    if (direction_id) {
+      dbQuery.where("groups.direction_id", direction_id).groupBy("groups.id");
     }
 
-    const total = await dbQuery.clone().count().groupBy('id');
+    const total = await dbQuery.clone().count().groupBy("id");
 
     dbQuery.orderBy(sort_by, sort_order);
     dbQuery.limit(limit).offset(offset);
@@ -90,14 +114,23 @@ const showGroup = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const group = await db('groups')
-      .leftJoin('stuff as stuff_teacher', 'stuff_teacher.id', 'groups.teacher_id')
-      .leftJoin('stuff as stuff_assistent ', 'stuff_assistent.id', 'groups.assistent_teacher_id')
-      .leftJoin('groups_students', 'groups_students.group_id', 'groups.id')
-      .leftJoin('students', 'groups_students.student_id', 'students.id')
+    const group = await db("groups")
+      .leftJoin(
+        "stuff as stuff_teacher",
+        "stuff_teacher.id",
+        "groups.teacher_id"
+      )
+      .leftJoin(
+        "stuff as stuff_assistent ",
+        "stuff_assistent.id",
+        "groups.assistent_teacher_id"
+      )
+      .leftJoin("groups_students", "groups_students.group_id", "groups.id")
+      .leftJoin("students", "groups_students.student_id", "students.id")
+      .leftJoin("directions", "groups.direction_id", "directions.id")
       .select(
-        'groups.id',
-        'groups.name',
+        "groups.id",
+        "groups.name",
         db.raw(`
         CASE
         WHEN stuff_teacher.id IS NULL THEN NULL
@@ -124,6 +157,15 @@ const showGroup = async (req, res) => {
         `),
         db.raw(`
         CASE
+        WHEN groups.direction_id IS NULL THEN NULL
+        ELSE json_build_object(
+            'id', directions.id,
+            'name', directions.name
+          )
+        END as directions
+        `),
+        db.raw(`
+        CASE
         WHEN students.id IS NULL THEN '[]'
         ELSE json_agg(
           json_build_object(
@@ -135,13 +177,19 @@ const showGroup = async (req, res) => {
         END as students
         `)
       )
-      .where({ 'groups.id': id })
-      .groupBy('groups.id', 'stuff_teacher.id', 'stuff_assistent.id', 'students.id')
+      .where({ "groups.id": id })
+      .groupBy(
+        "groups.id",
+        "stuff_teacher.id",
+        "stuff_assistent.id",
+        "students.id",
+        "directions.id"
+      )
       .first();
 
     if (!group) {
       return res.status(404).json({
-        error: 'Group not found',
+        error: "Group not found",
       });
     }
 
@@ -159,7 +207,10 @@ const patchGroup = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const updated = await db('groups').where({ id }).update(req.body).returning('*');
+    const updated = await db("groups")
+      .where({ id })
+      .update(req.body)
+      .returning("*");
 
     res.status(200).json({
       updated: updated[0],
@@ -175,7 +226,7 @@ const deleteGroup = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const existing = await db('groups').where({ id }).first();
+    const existing = await db("groups").where({ id }).first();
 
     if (!existing) {
       return res.status(404).json({
@@ -183,10 +234,10 @@ const deleteGroup = async (req, res) => {
       });
     }
 
-    const deleted = await db('groups')
+    const deleted = await db("groups")
       .where({ id })
       .delete()
-      .returning(['id', 'name', 'teacher_id', 'assistent_id']);
+      .returning(["id", "name", "teacher_id", "assistent_id"]);
 
     res.status(200).json({
       deleted: deleted[0],
@@ -202,7 +253,7 @@ const addStudent = async (req, res) => {
   try {
     const { id, student_id } = req.params;
 
-    await db('groups_students').insert({ group_id: id, student_id });
+    await db("groups_students").insert({ group_id: id, student_id });
 
     res.status(201).json({ success: true });
   } catch (error) {
@@ -216,7 +267,7 @@ const removeStudent = async (req, res) => {
   try {
     const { id, student_id } = req.params;
 
-    await db('groups_students').where({ group_id: id, student_id }).delete();
+    await db("groups_students").where({ group_id: id, student_id }).delete();
 
     res.status(201).json({ success: true });
   } catch (error) {
