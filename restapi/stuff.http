@@ -1,37 +1,61 @@
 ### Add stuff
 POST http://localhost:3001/stuff
 Content-Type: application/json
-Authorization: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MSwicm9sZSI6InN1cGVyX2FkbWluIiwiaWF0IjoxNjg2Nzk5MjcyLCJleHAiOjE2ODY4ODU2NzJ9.gtBrdZkw9JsCtDx05MkUrPaN3T2aVQEaWXvah_jgAus
+Authorization: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MSwicm9sZSI6ImFkbWluIiwiaWF0IjoxNjg3MzcxNTkzLCJleHAiOjE2ODc0NTc5OTN9.xm-qbe_F_GT4X4JpwEgpKc3QDIndJN7ZaeUdcFj6h5A
 
 {
-  "first_name": "F",
-  "last_name": ".....",
-  "role": "teacher",
-  "username": "test7",
+  "first_name": "admin",
+  "last_name": "admin",
+  "role": "admin",
+  "username": "admin",
   "password": "12345"
 }
 
+# {
+#   "first_name": "super",
+#   "last_name": "admin",
+#   "role": "super_admin",
+#   "username": "superadmin",
+#   "password": "12345"
+# }
+
+# {
+#   "first_name": "teacher",
+#   "last_name": "teacher",
+#   "role": "teacher",
+#   "username": "teacher",
+#   "password": "12345"
+# }
+
+# {
+#   "first_name": "assistant",
+#   "last_name": "teacher",
+#   "role": "assistent_teacher",
+#   "username": "assistent",
+#   "password": "12345"
+# }
+
 ### List stuff
-GET http://localhost:3001/stuff?role=teacher
-Authorization: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MSwicm9sZSI6InN1cGVyX2FkbWluIiwiaWF0IjoxNjg2Nzk5MjcyLCJleHAiOjE2ODY4ODU2NzJ9.gtBrdZkw9JsCtDx05MkUrPaN3T2aVQEaWXvah_jgAus
+GET http://localhost:3001/stuff?role=admin
+Authorization: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MSwicm9sZSI6ImFkbWluIiwiaWF0IjoxNjg3MzcxNTkzLCJleHAiOjE2ODc0NTc5OTN9.xm-qbe_F_GT4X4JpwEgpKc3QDIndJN7ZaeUdcFj6h5A
 # query params: role, q
 
 ### Show single stuff
 GET http://localhost:3001/stuff/1
-Authorization: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6OSwicm9sZSI6ImFkbWluIiwiaWF0IjoxNjg2Mzc3NzA1LCJleHAiOjE2ODY0NjQxMDV9.zM2jDB8F7Hvf0XmzJiPgCbP-yyhz-apCF9eGbIf9jps
+Authorization: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MSwicm9sZSI6ImFkbWluIiwiaWF0IjoxNjg3MzcxNTkzLCJleHAiOjE2ODc0NTc5OTN9.xm-qbe_F_GT4X4JpwEgpKc3QDIndJN7ZaeUdcFj6h5A
 
 ### Login schema
 POST http://localhost:3001/stuff/login
 Content-Type: application/json
 
 {
-  "username": "superadmin",
-  "password": "foobarbaz"
+  "username": "admin",
+  "password": "12345"
 }
 
 ### Update stuff
 PATCH http://localhost:3001/stuff/1
-Authorization: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6OSwicm9sZSI6ImFkbWluIiwiaWF0IjoxNjg2Mzc3NzA1LCJleHAiOjE2ODY0NjQxMDV9.zM2jDB8F7Hvf0XmzJiPgCbP-yyhz-apCF9eGbIf9jps
+Authorization: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MSwicm9sZSI6ImFkbWluIiwiaWF0IjoxNjg3MzcxNTkzLCJleHAiOjE2ODc0NTc5OTN9.xm-qbe_F_GT4X4JpwEgpKc3QDIndJN7ZaeUdcFj6h5A
 Content-Type: application/json
 
 {

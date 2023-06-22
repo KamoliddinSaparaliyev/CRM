@@ -1,60 +1,57 @@
 const express = require("express");
-const db = require("../../db");
-const knex = require("knex");
+const { Groups, Groups_Students } = require("../../../models");
+const { Sequelize } = require("sequelize");
+const {
+  NotFoundError,
+  UnauthorizedError,
+  BadReqqustError,
+} = require("../../shared/error");
 
 /**
  *
  * @param {express.Request} req
  * @param {express.Response} res
  */
-const postGroup = async (req, res) => {
+const postGroup = async (req, res, next) => {
   try {
     const { name, teacher_id, assistent_teacher_id, direction_id } = req.body;
 
     if (teacher_id) {
-      const existing = await db("stuff").where({ id: teacher_id }).first();
+      const existing = await Groups.findOne({ where: { id: teacher_id } });
 
       if (!existing || existing.role !== "teacher") {
-        return res.status(400).json({
-          error: "Teacher mavjud emas.",
-        });
+        throw new BadReqqustError(" not found");
       }
     }
     if (direction_id) {
-      const existing = await db("directions")
-        .where({ id: direction_id })
-        .first();
+      const existing = await Groups.findOne({ where: { id: direction_id } });
 
       if (!existing) {
-        return res.status(400).json({
-          error: "Yo'nalish mavjud emas.",
-        });
+        throw new BadReqqustError(" not found");
       }
     }
 
     if (assistent_teacher_id) {
-      const existing = await db("stuff")
-        .where({ id: assistent_teacher_id })
-        .first();
+      const existing = await Groups.findOne({
+        where: { id: assistent_teacher_id },
+      });
 
       if (!existing || existing.role !== "assistent_teacher") {
-        return res.status(400).json({
-          error: "Asistent teacher mavjud emas.",
-        });
+        throw new BadReqqustError(" not found");
       }
     }
 
-    const result = await db("groups")
-      .insert({ name, teacher_id, assistent_teacher_id, direction_id })
-      .returning("*");
-
+    const result = await Groups.create({
+      name,
+      teacher_id,
+      assistent_teacher_id,
+      direction_id,
+    });
     res.status(201).json({
-      group: result[0],
+      group: result,
     });
   } catch (error) {
-    res.status(500).json({
-      error: error.message,
-    });
+    next(error);
   }
 };
 
@@ -63,7 +60,7 @@ const postGroup = async (req, res) => {
  * @param {express.Request} req
  * @param {express.Response} res
  */
-const getGroups = async (req, res) => {
+const getGroups = async (req, res, next) => {
   try {
     const {
       q,
@@ -71,209 +68,200 @@ const getGroups = async (req, res) => {
       limit = 5,
       sort_by = "id",
       sort_order = "desc",
-      direction_id,
     } = req.query;
-    const dbQuery = db("groups").select(
-      "groups.id",
-      "groups.name",
-      "groups.teacher_id",
-      "groups.assistent_teacher_id",
-      "groups.direction_id"
-    );
+
+    const query = {
+      attributes: ["id", "name", "teacher_id", "assistent_teacher_id"],
+      where: {},
+      order: [[sort_by, sort_order]],
+      offset: Number(offset),
+      limit: Number(limit),
+    };
 
     if (q) {
-      dbQuery.andWhereILike("groups.name", `%${q}%`);
+      query.where({
+        name: {
+          [Op.iLike]: `%${q}`,
+        },
+      });
     }
-    if (direction_id) {
-      dbQuery.where("groups.direction_id", direction_id).groupBy("groups.id");
-    }
 
-    const total = await dbQuery.clone().count().groupBy("id");
+    const { rows, count } = await Stuff.findAndCountAll(query);
 
-    dbQuery.orderBy(sort_by, sort_order);
-    dbQuery.limit(limit).offset(offset);
-
-    const result = await dbQuery;
-
-    res.status(201).json({
-      groups: result,
+    res.status(200).json({
+      stuff: rows,
       pageInfo: {
-        total: total.length,
+        total: count,
         offset,
         limit,
       },
     });
   } catch (error) {
-    res.status(500).json({
-      error: error.message,
-    });
+    next(error);
   }
 };
 
-const showGroup = async (req, res) => {
+const showGroup = async (req, res, next) => {
   try {
     const { id } = req.params;
 
-    const group = await db("groups")
-      .leftJoin(
-        "stuff as stuff_teacher",
-        "stuff_teacher.id",
-        "groups.teacher_id"
-      )
-      .leftJoin(
-        "stuff as stuff_assistent ",
-        "stuff_assistent.id",
-        "groups.assistent_teacher_id"
-      )
-      .leftJoin("groups_students", "groups_students.group_id", "groups.id")
-      .leftJoin("students", "groups_students.student_id", "students.id")
-      .leftJoin("directions", "groups.direction_id", "directions.id")
-      .select(
-        "groups.id",
-        "groups.name",
-        db.raw(`
-        CASE
-        WHEN stuff_teacher.id IS NULL THEN NULL
+    const group = await Groups.findOne({
+      where: { id },
+      includes: [
+        {
+          model: Stuff,
+          as: "teacher",
+          attributes: ["id", "first_name", "last_name", "role", "username"],
+        },
+        {
+          model: Stuff,
+          as: "assistent",
+          attributes: ["id", "first_name", "last_name", "role", "username"],
+        },
+        {
+          model: Direction,
+          as: "direction",
+          attributes: ["id", "name"],
+        },
+        {
+          model: Students,
+          as: "students",
+          attributes: ["id", "first_name", "last_name"],
+          through: { attributes: [] },
+        },
+      ],
+      attributes: [
+        "id",
+        "name",
+        [
+          Sequelize.literal(`CASE
+        WHEN teacher.id IS NULL THEN NULL
         ELSE json_build_object(
-          'id', stuff_teacher.id,
-          'first_name', stuff_teacher.first_name,
-          'last_name', stuff_teacher.last_name,
-          'role', stuff_teacher.role,
-          'username', stuff_teacher.username
-        )
-        END as teacher
-        `),
-        db.raw(`
-        CASE
-        WHEN stuff_assistent.id IS NULL THEN NULL
+          'id', teacher.id,
+          'first_name', teacher.first_name,
+          'last_name', teacher.last_name,
+          'role', teacher.role,
+          'username', teacher.username)
+        END as teacher`),
+        ],
+        [
+          Sequelize.literal(`CASE
+        WHEN assistent.id IS NULL THEN NULL
         ELSE json_build_object(
-          'id', stuff_assistent.id,
-          'first_name', stuff_assistent.first_name,
-          'last_name', stuff_assistent.last_name,
-          'role', stuff_assistent.role,
-          'username', stuff_assistent.username
-        )
-        END as assistent
-        `),
-        db.raw(`
-        CASE
+          'id', assistent.id,
+          'first_name', assistent.first_name,
+          'last_name', assistent.last_name,
+          'role', assistent.role,
+          'username', assistent.username)
+        END as assistent`),
+        ],
+        [
+          Sequelize.literal(`CASE
         WHEN groups.direction_id IS NULL THEN NULL
         ELSE json_build_object(
             'id', directions.id,
-            'name', directions.name
-          )
-        END as directions
-        `),
-        db.raw(`
-        CASE
-        WHEN students.id IS NULL THEN '[]'
+            'name', directions.name)
+        END as direction`),
+        ],
+        [
+          Sequelize.literal(`CASE
+        WHEN Students.id IS NULL THEN '[]'
         ELSE json_agg(
           json_build_object(
             'id', students.id,
             'first_name', students.first_name,
-            'last_name', students.last_name
-          )
-        )
-        END as students
-        `)
-      )
-      .where({ "groups.id": id })
-      .groupBy(
-        "groups.id",
-        "stuff_teacher.id",
-        "stuff_assistent.id",
+            'last_name', students.last_name))
+        END as students`),
+        ],
+      ],
+      group: [
+        "Groups.id",
+        "teacher.id",
+        "assistent.id",
         "students.id",
-        "directions.id"
-      )
-      .first();
+        "direction.id",
+      ],
+    });
 
     if (!group) {
-      return res.status(404).json({
-        error: "Group not found",
-      });
+      throw new NotFoundError(" not found");
     }
 
     res.status(201).json({
       group,
     });
   } catch (error) {
-    res.status(500).json({
-      error: error.message,
-    });
+    next(error);
   }
 };
 
-const patchGroup = async (req, res) => {
+const patchGroup = async (req, res, next) => {
   try {
     const { id } = req.params;
 
-    const updated = await db("groups")
-      .where({ id })
-      .update(req.body)
-      .returning("*");
-
-    res.status(200).json({
-      updated: updated[0],
-    });
-  } catch (error) {
-    res.status(500).json({
-      error: error.message,
-    });
-  }
-};
-
-const deleteGroup = async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    const existing = await db("groups").where({ id }).first();
+    const existing = await Groups.findOne({ where: { id } });
 
     if (!existing) {
-      return res.status(404).json({
-        error: `${id}-idle group topilmadi`,
-      });
+      throw new BadReqqustError("Not found");
     }
-
-    const deleted = await db("groups")
-      .where({ id })
-      .delete()
-      .returning(["id", "name", "teacher_id", "assistent_id"]);
+    const updated = await Groups.update(req.body, { where: { id } });
 
     res.status(200).json({
-      deleted: deleted[0],
+      updated: updated,
     });
   } catch (error) {
-    res.status(500).json({
-      error: error.message,
-    });
+    next(error);
   }
 };
 
-const addStudent = async (req, res) => {
+const deleteGroup = async (req, res, next) => {
   try {
-    const { id, student_id } = req.params;
+    const { id } = req.params;
 
-    await db("groups_students").insert({ group_id: id, student_id });
+    const existing = await Groups.fiindOne({ where: { id } });
 
-    res.status(201).json({ success: true });
-  } catch (error) {
-    res.status(500).json({
-      error: error.message,
+    if (!existing) {
+      throw new NotFoundError("Not found");
+    }
+
+    const deleted = await Groups.destroy({ where: { id } });
+
+    res.status(200).json({
+      deleted: deleted,
     });
+  } catch (error) {
+    next(error);
   }
 };
 
-const removeStudent = async (req, res) => {
+const addStudent = async (req, res, next) => {
   try {
     const { id, student_id } = req.params;
 
-    await db("groups_students").where({ group_id: id, student_id }).delete();
+    await Groups_Students.create({ group_id: id, student_id });
 
     res.status(201).json({ success: true });
   } catch (error) {
-    res.status(500).json({
-      error: error.message,
+    next(error);
+  }
+};
+
+const removeStudent = async (req, res, next) => {
+  try {
+    const { id, student_id } = req.params;
+
+    const existing = await Groups_Students.findOne({
+      where: { group_id: id, student_id },
     });
+
+    if (!existing) {
+      throw new NotFoundError(
+        `${id}-yoki ${student_id} idle group yoki student  topilmadi`
+      );
+    }
+    res.status(201).json({ success: true });
+  } catch (error) {
+    next(error);
   }
 };
 

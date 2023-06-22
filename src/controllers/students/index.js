@@ -1,39 +1,58 @@
-const express = require('express');
-const db = require('../../db');
+const express = require("express");
+const { Students } = require("../../../models");
+const { NotFoundError, UnauthorizedError } = require("../../shared/error");
+const { not } = require("joi");
 
 /**
  *
  * @param {express.Request} req
  * @param {express.Response} res
  */
-const getStudents = async (req, res) => {
+const getStudents = async (req, res, next) => {
   try {
-    const { q, offset = 0, limit = 5, sort_by = 'id', sort_order = 'desc' } = req.query;
-    const dbQuery = db('students').select('id', 'first_name', 'last_name');
+    const {
+      q,
+      offset = 0,
+      limit = 5,
+      sort_by = "id",
+      sort_order = "desc",
+    } = req.query;
+
+    const query = {
+      attributes: ["id", "first_name", "last_name"],
+      where: {},
+      order: [[sort_by, sort_order]],
+      offset: Number(offset),
+      limit: Number(limit),
+    };
 
     if (q) {
-      dbQuery.andWhereILike('groups.name', `%${q}%`);
+      query.where[Op.or] = [
+        {
+          first_name: {
+            [Op.iLike]: `%${q}`,
+          },
+        },
+        {
+          last_name: {
+            [Op.iLike]: `%${q}`,
+          },
+        },
+      ];
     }
 
-    const total = await dbQuery.clone().count().groupBy('id');
-
-    dbQuery.orderBy(sort_by, sort_order);
-    dbQuery.limit(limit).offset(offset);
-
-    const students = await dbQuery;
+    const { rows, count } = await Stuff.findAndCountAll(query);
 
     res.status(200).json({
-      students,
+      stuff: rows,
       pageInfo: {
-        total: total.length,
+        total: count,
         offset,
         limit,
       },
     });
   } catch (error) {
-    res.status(500).json({
-      error: error.message,
-    });
+    next(error);
   }
 };
 
@@ -42,28 +61,23 @@ const getStudents = async (req, res) => {
  * @param {express.Request} req
  * @param {express.Response} res
  */
-const showStudents = async (req, res) => {
+const showStudents = async (req, res, next) => {
   try {
     const { id } = req.params;
-    console.log(id);
-    const students = await db('students')
-      .select('id', 'first_name', 'last_name')
-      .where({ id })
-      .first();
+    const stuff = await Students.findOne({
+      where: { id },
+      attributes: ["id", "first_name", "last_name"],
+    });
 
-    if (!students) {
-      return res.status(404).json({
-        error: 'Student not found',
-      });
+    if (!stuff) {
+      throw new NotFoundError("Student topiladi");
     }
 
     res.status(200).json({
-      students,
+      stuff,
     });
   } catch (error) {
-    res.status(500).json({
-      error: error.message,
-    });
+    next(error);
   }
 };
 
@@ -72,31 +86,29 @@ const showStudents = async (req, res) => {
  * @param {express.Request} req
  * @param {express.Response} res
  */
-const patchStudent = async (req, res) => {
+const patchStudent = async (req, res, next) => {
   try {
     const { ...changes } = req.body;
     const { id } = req.params;
 
-    const existing = await db('students').where({ id }).first();
+    const existing = await Students.findOne({ where: { id } });
 
     if (!existing) {
-      return res.status(404).json({
-        error: `${id}-idli student topilmadi`,
-      });
+      throw new NotFoundError("Student topiladi");
     }
 
-    const updated = await db('students')
-      .where({ id })
-      .update({ ...changes })
-      .returning(['id', 'first_name', 'last_name']);
+    const update = await Stuff.update(
+      { ...changes },
+      {
+        where: { id },
+      }
+    );
 
     res.status(200).json({
-      updated: updated[0],
+      updated: update,
     });
   } catch (error) {
-    res.status(500).json({
-      error: error.message,
-    });
+    next(error);
   }
 };
 
@@ -105,30 +117,23 @@ const patchStudent = async (req, res) => {
  * @param {express.Request} req
  * @param {express.Response} res
  */
-const deleteStudent = async (req, res) => {
+const deleteStudent = async (req, res, next) => {
   try {
     const { id } = req.params;
 
-    const existing = await db('students').where({ id }).first();
+    const existing = await Students.findOne({ where: { id } });
 
     if (!existing) {
-      return res.status(404).json({
-        error: `${id}-idle student topilmadi`,
-      });
+      throw new NotFoundError("Student topiladi");
     }
 
-    const deleted = await db('students')
-      .where({ id })
-      .delete()
-      .returning(['id', 'first_name', 'last_name']);
+    const deleted = await Stuff.destroy({ where: { id } });
 
     res.status(200).json({
-      deleted: deleted[0],
+      deleted: deleted,
     });
   } catch (error) {
-    res.status(500).json({
-      error,
-    });
+    next(error);
   }
 };
 
@@ -137,27 +142,21 @@ const deleteStudent = async (req, res) => {
  * @param {express.Request} req
  * @param {express.Response} res
  */
-const postStudent = async (req, res) => {
+const postStudent = async (req, res, next) => {
+  const { first_name, last_name } = req.body;
   try {
-    const { first_name, last_name } = req.body;
-
-    const result = await db('students')
-      .insert({
-        first_name,
-        last_name,
-      })
-      .returning('*');
+    const result = await Students.create({
+      first_name,
+      last_name,
+    });
 
     res.status(201).json({
-      student: result[0],
+      user: result,
     });
   } catch (error) {
-    res.status(500).json({
-      error: error.message,
-    });
+    next(error);
   }
 };
-
 module.exports = {
   getStudents,
   showStudents,

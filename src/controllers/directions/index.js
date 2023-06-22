@@ -1,39 +1,50 @@
-const express = require('express');
-const db = require('../../db');
+const express = require("express");
+const { Directions } = require("../../../models");
 
 /**
  *
  * @param {express.Request} req
  * @param {express.Response} res
+ * @param {express.NextFunction} next
  */
-const getDirections = async (req, res) => {
+const getDirections = async (req, res, next) => {
   try {
-    const { q, offset = 0, limit = 5, sort_by = 'id', sort_order = 'desc' } = req.query;
-    const dbQuery = db('directions').select('id', 'name');
+    const {
+      q,
+      offset = 0,
+      limit = 5,
+      sort_by = "id",
+      sort_order = "desc",
+    } = req.query;
+
+    const query = {
+      attributes: ["id", "name"],
+      where: {},
+      order: [[sort_by, sort_order]],
+      offset: Number(offset),
+      limit: Number(limit),
+    };
 
     if (q) {
-      dbQuery.andWhereILike('groups.name', `%${q}%`);
+      query.where = {
+        name: {
+          [Op.iLike]: `%${q}`,
+        },
+      };
     }
 
-    const total = await dbQuery.clone().count().groupBy('id');
-
-    dbQuery.orderBy(sort_by, sort_order);
-    dbQuery.limit(limit).offset(offset);
-
-    const directions = await dbQuery;
+    const { rows, count } = await Directions.findAndCountAll(query);
 
     res.status(200).json({
-      directions,
+      stuff: rows,
       pageInfo: {
-        total: total.length,
+        total: count,
         offset,
         limit,
       },
     });
   } catch (error) {
-    res.status(500).json({
-      error: error.message,
-    });
+    next(error);
   }
 };
 
@@ -41,26 +52,25 @@ const getDirections = async (req, res) => {
  *
  * @param {express.Request} req
  * @param {express.Response} res
+ * @param {express.NextFunction} next
  */
-const showDirection = async (req, res) => {
+const showDirection = async (req, res, next) => {
   try {
     const { id } = req.params;
 
-    const direction = await db('directions').select('id', 'name').where({ id }).first();
+    const direction = await Directions.findOne({ where: { id } });
 
     if (!direction) {
       return res.status(404).json({
-        error: 'Direction not found',
+        error: "Direction not found",
       });
     }
 
     res.status(200).json({
-      directions,
+      direction,
     });
   } catch (error) {
-    res.status(500).json({
-      error: error.message,
-    });
+    next(error);
   }
 };
 
@@ -68,13 +78,14 @@ const showDirection = async (req, res) => {
  *
  * @param {express.Request} req
  * @param {express.Response} res
+ * @param {express.NextFunction} next
  */
-const patchDirection = async (req, res) => {
+const patchDirection = async (req, res, next) => {
   try {
     const { ...changes } = req.body;
     const { id } = req.params;
 
-    const existing = await db('directions').where({ id }).first();
+    const existing = await Directions.findOne({ where: { id } });
 
     if (!existing) {
       return res.status(404).json({
@@ -82,18 +93,13 @@ const patchDirection = async (req, res) => {
       });
     }
 
-    const updated = await db('directions')
-      .where({ id })
-      .update({ ...changes })
-      .returning(['id', 'name']);
+    const updated = await Directions.update({ ...changes }, { where: { id } });
 
     res.status(200).json({
-      updated: updated[0],
+      updated: updated,
     });
   } catch (error) {
-    res.status(500).json({
-      error: error.message,
-    });
+    next(error);
   }
 };
 
@@ -101,12 +107,13 @@ const patchDirection = async (req, res) => {
  *
  * @param {express.Request} req
  * @param {express.Response} res
+ * @param {express.NextFunction} next
  */
-const deleteDirection = async (req, res) => {
+const deleteDirection = async (req, res, next) => {
   try {
     const { id } = req.params;
 
-    const existing = await db('directions').where({ id }).first();
+    const existing = await Directions.findOne({ where: { id } });
 
     if (!existing) {
       return res.status(404).json({
@@ -114,10 +121,10 @@ const deleteDirection = async (req, res) => {
       });
     }
 
-    const deleted = await db('directions').where({ id }).delete().returning(['id', 'name']);
+    const deleted = await Directions.destroy({ where: { id } });
 
     res.status(200).json({
-      deleted: deleted[0],
+      deleted: deleted,
     });
   } catch (error) {
     res.status(500).json({
@@ -130,20 +137,19 @@ const deleteDirection = async (req, res) => {
  *
  * @param {express.Request} req
  * @param {express.Response} res
+ * @param {express.NextFunction} next
  */
-const postDirection = async (req, res) => {
+const postDirection = async (req, res, next) => {
   try {
     const { name } = req.body;
 
-    const result = await db('directions').insert({ name }).returning('*');
+    const result = await Directions.create({ name });
 
     res.status(201).json({
-      direction: result[0],
+      direction: result,
     });
   } catch (error) {
-    res.status(500).json({
-      error: error.message,
-    });
+    next(error);
   }
 };
 

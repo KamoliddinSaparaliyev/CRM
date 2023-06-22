@@ -1,14 +1,16 @@
+const { ForbiddenError } = require("../error");
+
 const hasRole = (roles) => {
   return (req, res, next) => {
     const { role } = req.user;
 
     if (!roles.includes(role)) {
-      return res.status(403).json({
-        error: 'Ruxsat berilmagan.',
-      });
+      throw new ForbiddenError("Ruhsat yo'q");
     }
 
-    next();
+    next();return res.status(403).json({
+      error: "Ruxsat berilmagan.",
+    });
   };
 };
 
